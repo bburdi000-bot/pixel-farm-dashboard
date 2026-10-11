@@ -1,0 +1,6 @@
+# Real operational state never gets committed. The demo snapshot is synthetic.
+farm-model.json
+farm-model.local.json
+*.local.json
+.DS_Store
+node_modules/
