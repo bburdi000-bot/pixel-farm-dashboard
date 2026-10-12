@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Farm &mdash; an operational dashboard that renders real state</title>
+<meta name="description" content="A 16-bit farm that renders the real state of a software estate. Every tile, sprite and animation is authored as row strings in source: no image files, no webfonts, no build step.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Pixel Farm">
+<meta property="og:description" content="A 16-bit dashboard where motion only ever encodes a real event. No images, no webfonts, no build step.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231d2e21'/><rect x='2' y='9' width='12' height='2' fill='%232e241b'/><rect x='7' y='3' width='2' height='6' fill='%2358a6ff'/></svg>">
+<style>
+  :root{ --ink:#e6e9ee; --dim:#7d8794; --dark:#49525e; --line:#2d3e52;
+         --panel:#12151a; --bg:#0b0d10; --ok:#3fb950; --warn:#d29922; --bad:#f85149; }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--dim);
+    font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    -webkit-font-smoothing:antialiased}
+  a{color:#58a6ff}
+  #wrap{display:flex;align-items:flex-start;gap:14px;padding:14px;min-height:100vh}
+  #host{line-height:0;flex:0 0 auto}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block;
+    border:4px solid var(--line);box-shadow:6px 6px 0 #000}
+  #rail{flex:1 1 300px;max-width:360px;display:flex;flex-direction:column;gap:10px}
+  /* Retro chrome: 4px borders, blocky offset shadow, no webfont. The DOM holds
+     every word and number -- the engine's 4x6 bitmap font is uppercase-only, so
+     prose drawn into the canvas could not be read, selected, found with cmd-F or
+     reached by a screen reader. Canvas owns space and motion; DOM owns language. */
+  .w{border:4px solid var(--line);background:var(--panel);box-shadow:4px 4px 0 #000;padding:9px}
+  .w h4{margin:0 0 7px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dark);border-bottom:1px solid #1e232b;padding-bottom:5px}
+  .w h4.bad{color:var(--bad)}
+  .r{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+  b{color:var(--ink);font-weight:600}
+  code{color:var(--ink);background:#0a0c0f;padding:0 3px;border-radius:2px;font-size:11px}
+  .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.dm{color:var(--dark)}
+  ul{margin:5px 0 0;padding-left:15px}li{margin:2px 0}
+  .note{margin:7px 0 0;font-size:11px;line-height:1.55;color:var(--dark)}
+  .bar{height:12px;border:2px solid var(--line);background:#07090b;position:relative;margin-top:4px}
+  .bar i{position:absolute;inset:0 auto 0 0;display:block}
+  .key{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:10.5px}
+  .key span{display:flex;align-items:center;gap:4px}
+  .sw{width:9px;height:9px;border:1px solid #000;display:inline-block}
+  /* Below ~900px the canvas cannot shrink (its pixel grid is the point), so the
+     rail moves under it and the canvas scrolls horizontally rather than being
+     resampled to a blurry fraction of a device pixel. */
+  @media (max-width:900px){
+    #wrap{flex-direction:column;padding:8px}
+    #host{max-width:100%;overflow-x:auto}
+    #rail{max-width:none;width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){ /* honoured in src/farm.js, see REDUCED */ }
+</style></head><body>
+<div id="wrap"><div id="host"></div><div id="rail"></div></div>
+<noscript><p style="padding:14px">This dashboard renders to a canvas from authored
+pixel data, so it needs JavaScript. The art itself is readable as plain text in
+<code>src/engine.js</code> and <code>src/sprites.js</code>.</p></noscript>
+<script src="src/engine.js"></script>
+<script src="src/sprites.js"></script>
+<script src="src/farm.js"></script>
+</body></html>

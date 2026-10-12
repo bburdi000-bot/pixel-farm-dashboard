@@ -1,0 +1,66 @@
+name: ci
+# Four gates, no dependencies, no build step. The whole point of authoring art
+# as row strings in source is that `node` alone can verify it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 1. SYNTAX. A broken .js in a no-build project ships a blank page, and
+      #    nothing else here would catch it.
+      - name: node --check every source file
+        run: |
+          set -e
+          found=0
+          for f in src/*.js tools/*.js; do
+            node --check "$f" && echo "  ok    $f"
+            found=$((found+1))
+          done
+          test "$found" -gt 0 || { echo "no .js files found"; exit 1; }
+          echo "$found file(s) parse"
+
+      # 2. ART METRICS. Measures the authored rows read straight out of
+      #    src/engine.js and src/sprites.js: interior detail >= 12%,
+      #    clustering >= 50%, luminance span <= 8, and the alert axis keeping
+      #    >= 15 dY over every ground surface.
+      - name: art metrics
+        run: node tools/artcheck.js
+
+      # 3. FIXTURE INTEGRITY. Re-derives the committed demo model and diffs it.
+      #    This is the privacy gate: the generator refuses to emit any real
+      #    identifier, and --check proves the committed JSON is its output and
+      #    was not hand-edited to slip something in.
+      - name: demo fixtures match their generator
+        run: node tools/make-demo.js --check
+
+      # 4. BEHAVIOUR. The motion contract and a real headless render.
+      - name: motion contract
+        run: |
+          node tools/verify-commute.js data/farm-demo.json
+          node tools/verify-commute.js data/farm-demo-nomap.json
+      - name: headless render smoke
+        run: node tools/render-smoke.js
+
+      # 5. NO REAL DATA. Belt and braces over the .gitignore: fail the build if
+      #    a live model, or any string from one, ever reaches a commit.
+      - name: no live model in the tree
+        run: |
+          set -e
+          if git ls-files --error-unmatch farm-model.json 2>/dev/null; then
+            echo "farm-model.json is tracked -- that file is live state"; exit 1; fi
+          if git ls-files | grep -E '(^|/)farm-model(\.local)?\.json$'; then
+            echo "a live model is tracked"; exit 1; fi
+          if git grep -nIE 'marginsignal|bburdi|msos' -- . ':!.github/workflows/ci.yml' ':!README.md'; then
+            echo "a private identifier appears in the tree"; exit 1; fi
+          echo "  ok    no live model, no private identifiers"

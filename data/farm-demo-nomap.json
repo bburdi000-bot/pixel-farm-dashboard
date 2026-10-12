@@ -1,0 +1,380 @@
+{
+  "scanned": "2026-10-11T09:14:00",
+  "fields": [],
+  "buildings": [
+    {
+      "dept": "00 Direction",
+      "label": "00 DIR",
+      "seats": 1,
+      "bad": 0,
+      "unobs": 0,
+      "retired": 0,
+      "stale": 0,
+      "health": "ok"
+    },
+    {
+      "dept": "01 Build",
+      "label": "01 BUILD",
+      "seats": 1,
+      "bad": 1,
+      "unobs": 0,
+      "retired": 0,
+      "stale": 14,
+      "health": "bad"
+    },
+    {
+      "dept": "02 Quality",
+      "label": "02 QA",
+      "seats": 2,
+      "bad": 1,
+      "unobs": 1,
+      "retired": 0,
+      "stale": 88,
+      "health": "bad"
+    },
+    {
+      "dept": "03 Growth",
+      "label": "03 GROWTH",
+      "seats": 3,
+      "bad": 2,
+      "unobs": 1,
+      "retired": 0,
+      "stale": 62,
+      "health": "bad"
+    },
+    {
+      "dept": "04 Ship",
+      "label": "04 SHIP",
+      "seats": 1,
+      "bad": 0,
+      "unobs": 1,
+      "retired": 0,
+      "stale": 171,
+      "health": "unobservable"
+    },
+    {
+      "dept": "05 Billing",
+      "label": "05 BILL",
+      "seats": 1,
+      "bad": 0,
+      "unobs": 1,
+      "retired": 0,
+      "stale": 94,
+      "health": "unobservable"
+    },
+    {
+      "dept": "06 Infra",
+      "label": "06 INFRA",
+      "seats": 2,
+      "bad": 0,
+      "unobs": 0,
+      "retired": 0,
+      "stale": 0,
+      "health": "ok"
+    },
+    {
+      "dept": "07 On-call",
+      "label": "07 ONCALL",
+      "seats": 1,
+      "bad": 0,
+      "unobs": 0,
+      "retired": 0,
+      "stale": 0,
+      "health": "ok"
+    },
+    {
+      "dept": "08 Labs",
+      "label": "08 LABS",
+      "seats": 1,
+      "bad": 1,
+      "unobs": 0,
+      "retired": 0,
+      "stale": 20,
+      "health": "bad"
+    },
+    {
+      "dept": "99 Sunset",
+      "label": "99 SUNSET",
+      "seats": 1,
+      "bad": 0,
+      "unobs": 0,
+      "retired": 1,
+      "stale": 0,
+      "health": "condemned"
+    }
+  ],
+  "workers": [
+    {
+      "id": "INDEX",
+      "title": "Index steward",
+      "tier": 1,
+      "objective": "ecosystem",
+      "queue": 2,
+      "roots": [
+        "api-gateway",
+        "docs-site"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "PLATFORM",
+      "title": "Platform steward",
+      "tier": 1,
+      "objective": "ecosystem",
+      "queue": 3,
+      "roots": [
+        "api-gateway",
+        "batch-jobs",
+        "sandbox-tmp"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "DESKTOP",
+      "title": "Desktop steward",
+      "tier": 1,
+      "objective": "ecosystem",
+      "queue": 3,
+      "roots": [
+        "local-inbox",
+        "local-drafts",
+        "local-scans"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "RELEASE",
+      "title": "Release steward",
+      "tier": 4,
+      "objective": "delivery",
+      "queue": 8,
+      "roots": [
+        "web-client",
+        "docs-site",
+        "design-tokens"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "ARCHIVE",
+      "title": "Archive steward",
+      "tier": 4,
+      "objective": "delivery",
+      "queue": 3,
+      "roots": [
+        "archive-2024",
+        "legacy-importer",
+        "vendor-dumps"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "CLEANUP",
+      "title": "Cleanup steward",
+      "tier": 4,
+      "objective": "delivery",
+      "queue": 4,
+      "roots": [
+        "media-exports",
+        "scratch-notes"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "NOTIFY",
+      "title": "Notify steward",
+      "tier": 3,
+      "objective": "comms",
+      "queue": 2,
+      "roots": [
+        "mail-templates"
+      ],
+      "state": "working"
+    },
+    {
+      "id": "AUDIT",
+      "title": "Audit steward",
+      "tier": 2,
+      "objective": "assurance",
+      "queue": 5,
+      "roots": [
+        "report-builder",
+        "vendor-dumps"
+      ],
+      "state": "distress"
+    },
+    {
+      "id": "INTAKE",
+      "title": "Intake steward",
+      "tier": 2,
+      "objective": "assurance",
+      "queue": 0,
+      "roots": [
+        "crm-sync"
+      ],
+      "state": "distress"
+    },
+    {
+      "id": "SURVEY",
+      "title": "Survey steward",
+      "tier": 1,
+      "objective": "ecosystem",
+      "queue": 0,
+      "roots": [
+        "sandbox-tmp"
+      ],
+      "state": "idle"
+    }
+  ],
+  "machines": [
+    {
+      "id": "healthcheck",
+      "state": "running",
+      "age": 5,
+      "fresh": 30,
+      "sched": "timer"
+    },
+    {
+      "id": "metrics-roll",
+      "state": "running",
+      "age": 44,
+      "fresh": 120,
+      "sched": "timer"
+    },
+    {
+      "id": "log-ship",
+      "state": "running",
+      "age": 61,
+      "fresh": 90,
+      "sched": "timer"
+    },
+    {
+      "id": "index-rebuild",
+      "state": "running",
+      "age": 640,
+      "fresh": 900,
+      "sched": "timer"
+    },
+    {
+      "id": "nightly-digest",
+      "state": "faulted",
+      "age": 310,
+      "fresh": 60,
+      "sched": "timer"
+    },
+    {
+      "id": "cache-warm",
+      "state": "faulted",
+      "age": 96,
+      "fresh": 15,
+      "sched": "timer"
+    },
+    {
+      "id": "token-rotate",
+      "state": "unobservable",
+      "age": null,
+      "fresh": null,
+      "sched": "timer"
+    },
+    {
+      "id": "queue-drain",
+      "state": "unobservable",
+      "age": null,
+      "fresh": null,
+      "sched": "worker"
+    },
+    {
+      "id": "webhook-relay",
+      "state": "uncontracted",
+      "age": 7,
+      "fresh": null,
+      "sched": "worker"
+    },
+    {
+      "id": "feed-fetch",
+      "state": "uncontracted",
+      "age": 58,
+      "fresh": null,
+      "sched": "hosted-cron"
+    },
+    {
+      "id": "thumb-gen",
+      "state": "uncontracted",
+      "age": 58,
+      "fresh": null,
+      "sched": "hosted-cron"
+    },
+    {
+      "id": "sitemap-ping",
+      "state": "uncontracted",
+      "age": 58,
+      "fresh": null,
+      "sched": "hosted-cron"
+    },
+    {
+      "id": "usage-report",
+      "state": "uncontracted",
+      "age": 44,
+      "fresh": null,
+      "sched": "ci"
+    },
+    {
+      "id": "link-check",
+      "state": "uncontracted",
+      "age": 902,
+      "fresh": null,
+      "sched": "ci"
+    },
+    {
+      "id": "backup-verify",
+      "state": "uncontracted",
+      "age": 1180,
+      "fresh": null,
+      "sched": "timer"
+    }
+  ],
+  "weather": {
+    "verdict": "DRIFT",
+    "breaches": [
+      "NO MAP: registry unreadable"
+    ],
+    "mission": 0.44,
+    "meta": 0.29
+  },
+  "gold": {
+    "week": 6.4,
+    "cap": 25,
+    "pct": 26,
+    "over": false
+  },
+  "fallow": [],
+  "dry": [],
+  "unsurveyed": [],
+  "unjudgeableSeats": [
+    {
+      "seat": "review_board",
+      "dept": "02 Quality",
+      "cadence": "on-demand",
+      "age": 88
+    },
+    {
+      "seat": "market_watch",
+      "dept": "03 Growth",
+      "cadence": "monitor",
+      "age": 62
+    },
+    {
+      "seat": "release_mgr",
+      "dept": "04 Ship",
+      "cadence": "on-demand",
+      "age": 171
+    },
+    {
+      "seat": "invoicing",
+      "dept": "05 Billing",
+      "cadence": "monitor",
+      "age": 94
+    }
+  ],
+  "demo": true
+}
