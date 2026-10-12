@@ -77,3 +77,8 @@ jobs:
           if git grep -nIE 'marginsignal|bburdi' -- . ':!.github/workflows/ci.yml' ':!README.md'; then
             echo "FAIL: a brand identifier appears in the tree"; exit 1; fi
           echo "  ok    no live model; generator is sandboxed to data/; no brand strings"
+
+      # 5. ART ROUND TRIP. The PNG bridge that lets tiles be edited in a pixel
+      #    editor must be lossless, or art silently changes shape in transit.
+      - name: pixedit round trip
+        run: node tools/pixedit.js verify

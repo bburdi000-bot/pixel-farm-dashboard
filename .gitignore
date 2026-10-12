@@ -14,3 +14,6 @@ build-real.js
 
 .DS_Store
 node_modules/
+
+# pixedit scratch: PNGs are a working form, row strings are the source of truth
+.pixedit/
