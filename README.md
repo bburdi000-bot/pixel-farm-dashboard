@@ -113,6 +113,20 @@ No real repository name, department, backlog, verdict, staleness figure or spend
 number appears anywhere in this repository, and `.gitignore` plus a CI gate keep
 it that way.
 
+### Minimal schema: emit only what something renders
+
+An audit of `src/farm.js` found five fields in the original model that no
+renderer path ever reads: per-department staleness and retirement counts, file
+and dirty-file counts per repository, and a top-level findings tally. They were
+pure payload — and the staleness was the single most sensitive derived number in
+the file. The schema in `data/` drops all five. The staleness that *is* shown
+reaches the page through `unjudgeableSeats[].age`, which is the honest place for
+it, next to the cadence that explains why nothing can judge that seat.
+
+That is the general rule this repo follows: a field that is not drawn is not
+published, and a field that is drawn is published next to the thing that makes
+it interpretable.
+
 ```bash
 # the demo, locally — fetch() cannot read relative paths over file://
 python3 -m http.server 8080      # then open http://localhost:8080/

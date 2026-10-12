@@ -52,15 +52,28 @@ jobs:
       - name: headless render smoke
         run: node tools/render-smoke.js
 
-      # 5. NO REAL DATA. Belt and braces over the .gitignore: fail the build if
-      #    a live model, or any string from one, ever reaches a commit.
+      # 5. NO REAL DATA. Three independent controls, because the allow-list in
+      #    make-demo.js only catches strings that reach the output WITHOUT being
+      #    declared. It cannot catch a real name typed into a declared table --
+      #    that is what 5b and 5c are for.
       - name: no live model in the tree
         run: |
           set -e
-          if git ls-files --error-unmatch farm-model.json 2>/dev/null; then
-            echo "farm-model.json is tracked -- that file is live state"; exit 1; fi
-          if git ls-files | grep -E '(^|/)farm-model(\.local)?\.json$'; then
-            echo "a live model is tracked"; exit 1; fi
-          if git grep -nIE 'marginsignal|bburdi|msos' -- . ':!.github/workflows/ci.yml' ':!README.md'; then
-            echo "a private identifier appears in the tree"; exit 1; fi
-          echo "  ok    no live model, no private identifiers"
+          # 5a. the live model must never be tracked
+          if git ls-files | grep -E '(^|/)farm-model.*\.json$'; then
+            echo "FAIL: a live model is tracked"; exit 1; fi
+          # 5b. the generator must be incapable of reaching real state. It may
+          #     only touch data/. No home directory, no env, no child process,
+          #     no network -- so "regenerate the fixtures" can never read a disk
+          #     it should not. This is checkable in public without naming
+          #     anything private.
+          if grep -nE "homedir|process\.env|child_process|require\(.(http|https|net|dns)\.\)|fetch\(" tools/make-demo.js; then
+            echo "FAIL: the generator can reach outside data/"; exit 1; fi
+          if grep -nE "readFileSync|writeFileSync" tools/make-demo.js | grep -vE "path\.join\(OUT|\bfp\b"; then
+            echo "FAIL: the generator does file I/O outside OUT"; exit 1; fi
+          # 5c. the public brand strings are the only real identifiers safe to
+          #     name in a public gate; they must not appear outside the README
+          #     link and this file.
+          if git grep -nIE 'marginsignal|bburdi' -- . ':!.github/workflows/ci.yml' ':!README.md'; then
+            echo "FAIL: a brand identifier appears in the tree"; exit 1; fi
+          echo "  ok    no live model; generator is sandboxed to data/; no brand strings"

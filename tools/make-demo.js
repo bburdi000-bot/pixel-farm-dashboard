@@ -83,10 +83,17 @@ for (const [dept, label, seat, cadence, age, retired] of SEAT_SRC) {
   if (unobs) d.unobs++;
   if (retired) d.retired++;
 }
+// NOTE on what is deliberately ABSENT. An audit of src/farm.js shows the
+// renderer never reads buildings[].stale, buildings[].retired, fields[].files,
+// fields[].dirty or a top-level detect{} -- they were pure payload in the
+// private model. `stale` is the worst of them: a per-department staleness in
+// days is the single most sensitive derived number in the real file, and it is
+// not drawn. The staleness that IS shown reaches the page through
+// unjudgeableSeats[].age, which is the honest place for it. So this fixture
+// defines the minimal schema: emit only what something renders.
 const buildings = [...depts.values()].map(d => ({
   dept: d.dept, label: d.label,
-  seats: d.seats.length, bad: d.bad, unobs: d.unobs, retired: d.retired,
-  stale: Math.max(0, ...d.seats.filter(s => !s.retired).map(s => s.age || 0)),
+  seats: d.seats.length, bad: d.bad, unobs: d.unobs,
   // condemned > sick > unobservable > ok. One unjudgeable seat forbids green.
   health: d.retired === d.seats.length ? 'condemned'
         : d.bad   ? 'bad'

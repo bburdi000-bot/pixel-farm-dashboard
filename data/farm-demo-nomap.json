@@ -8,8 +8,6 @@
       "seats": 1,
       "bad": 0,
       "unobs": 0,
-      "retired": 0,
-      "stale": 0,
       "health": "ok"
     },
     {
@@ -18,8 +16,6 @@
       "seats": 1,
       "bad": 1,
       "unobs": 0,
-      "retired": 0,
-      "stale": 14,
       "health": "bad"
     },
     {
@@ -28,8 +24,6 @@
       "seats": 2,
       "bad": 1,
       "unobs": 1,
-      "retired": 0,
-      "stale": 88,
       "health": "bad"
     },
     {
@@ -38,8 +32,6 @@
       "seats": 3,
       "bad": 2,
       "unobs": 1,
-      "retired": 0,
-      "stale": 62,
       "health": "bad"
     },
     {
@@ -48,8 +40,6 @@
       "seats": 1,
       "bad": 0,
       "unobs": 1,
-      "retired": 0,
-      "stale": 171,
       "health": "unobservable"
     },
     {
@@ -58,8 +48,6 @@
       "seats": 1,
       "bad": 0,
       "unobs": 1,
-      "retired": 0,
-      "stale": 94,
       "health": "unobservable"
     },
     {
@@ -68,8 +56,6 @@
       "seats": 2,
       "bad": 0,
       "unobs": 0,
-      "retired": 0,
-      "stale": 0,
       "health": "ok"
     },
     {
@@ -78,8 +64,6 @@
       "seats": 1,
       "bad": 0,
       "unobs": 0,
-      "retired": 0,
-      "stale": 0,
       "health": "ok"
     },
     {
@@ -88,8 +72,6 @@
       "seats": 1,
       "bad": 1,
       "unobs": 0,
-      "retired": 0,
-      "stale": 20,
       "health": "bad"
     },
     {
@@ -98,8 +80,6 @@
       "seats": 1,
       "bad": 0,
       "unobs": 0,
-      "retired": 1,
-      "stale": 0,
       "health": "condemned"
     }
   ],
