@@ -13,9 +13,10 @@ and a JSON file. `node` alone can verify the whole thing, which is what CI does.
 
 ```
 index.html          the page
-src/engine.js       tile engine: compiled palette blit, 6 authored 16x16 tiles,
+src/engine.js       tile engine: compiled palette blit, 29 authored 16x16 tiles,
                     baked ground layer, packed 4x6 bitmap font
-src/sprites.js      16x24 torso, 4 leg frames, 3 tool frames, building parts, props
+src/sprites.js      16x32 figure (16x24 torso + 4 leg frames), tool frames,
+                    building parts, props — 61 items total, all metric-gated
 src/farm.js         layout, the baked ground, the commute state machine, the loader
 data/               the synthetic demo model (see "The data" below)
 tools/              the verifiers CI runs — all four of them are the real gates
