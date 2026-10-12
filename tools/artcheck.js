@@ -63,6 +63,10 @@ function score(name, rows, palName) {
     maxY: ys.length ? Math.max(...ys) : 0, colours: used.size, problems };
 }
 
+/* The scene has exactly ONE declared light source, so exactly one material is
+ * allowed above the alert floor. Everything else -- including every figure --
+ * is structure and must stay below it. */
+const EMITTERS = new Set(['parts.lanternHead', 'parts.lamp', 'parts.winLit', 'parts.winDim']);
 function verdict(s, strict) {
   const f = [];
   if (s.problems.length) f.push('INVALID');
@@ -70,8 +74,15 @@ function verdict(s, strict) {
     if (s.detail < 12) f.push('FLAT');
     if (s.clus < 50)   f.push('NOISY');
     if (s.span > 8)    f.push('SPAN');
-    if (s.maxY >= 20)  f.push('ALERT-REGISTER');
   }
+  // maxY gates EVERYTHING, not just 16x16 ground. This is where the inversion
+  // lived: the shipped figure measured maxY 40.9 -- skin-lit, skin-shadow and
+  // shirt-lit were all BRIGHTER than #f85149 (26.32), so ten faces were the
+  // loudest objects on a canvas whose dusk palette exists to reserve the top of
+  // the range for alerts. A face carries no information; every worker has one.
+  // span stays ground-only: the floor must sit in the structure register, but a
+  // figure is the SUBJECT and needs internal contrast to read at 16px.
+  if (!EMITTERS.has(s.name) && s.maxY >= 20) f.push('ALERT-REGISTER');
   return f.length ? f.join('+') : 'pass';
 }
 
@@ -82,7 +93,12 @@ items.push(['torso', S.TORSO, 'worker', false]);
 S.LEGS.forEach((r, i)  => items.push([`legs[${i}]`,  r, 'worker', false]));
 S.TOOLS.forEach((r, i) => items.push([`tools[${i}]`, r, 'worker', false]));
 for (const k in S.PARTS) items.push([`parts.${k}`, S.PARTS[k], 'build', false]);
-for (const k in S.PROPS) items.push([`props.${k}`, S.PROPS[k], 'build', false]);
+// Props are authored in DIFFERENT palettes: the contact shadows and site props
+// index the two new ground slots (e = shadow core, f = shadow rim), the lantern
+// head is amber from PAL.build. Hardcoding one palette here silently reported
+// every ground prop as INVALID, which is how a mis-palette ships.
+const PROP_PAL = { shed: 'build' };
+for (const k in S.PROPS) items.push([`props.${k}`, S.PROPS[k], PROP_PAL[k] || 'ground', false]);
 // the 32-row composite the renderer actually blits
 S.LEGS.forEach((l, i) => items.push([`figure[${i}]`, S.TORSO.concat(l), 'worker', false]));
 
@@ -93,7 +109,7 @@ for (const [name, rows, pal, strict] of items) {
   const s = score(name, rows, pal), v = verdict(s, strict);
   if (v !== 'pass') bad++;
   console.log(`${name.padEnd(19)} ${(s.w + 'x' + s.h).padEnd(7)} ${s.detail.toFixed(1).padStart(6)}% ${s.clus.toFixed(0).padStart(4)}% `
-    + `${s.span.toFixed(2).padStart(6)} ${s.maxY.toFixed(1).padStart(6)} ${String(s.colours).padStart(5)}  ${strict ? v : v + ' (not scored)'}`);
+    + `${s.span.toFixed(2).padStart(6)} ${s.maxY.toFixed(1).padStart(6)} ${String(s.colours).padStart(5)}  ${strict || v !== 'pass' ? v : v + ' (span not scored)'}`);
   s.problems.slice(0, 3).forEach(p => console.log('      ! ' + p));
 }
 

@@ -19,44 +19,47 @@
 'use strict';
 
 /* ---- objective shirts. Hue carries identity; luminance carries meaning. ----
- * All three slots of every ramp are isoluminant with the authored blue
- * (engine.js worker slots 6-8) to 0.00 in linearized Rec.709: Y = 5.69 /
- * 13.74 / 36.57. Teams are tellable at a glance and the luminance budget the
- * art direction rests on is byte-for-byte unchanged -- so the alert axis keeps
- * the +22 dY it has over every ground surface. */
-const SHIRT = {
-  ecosystem: ['#32474b', '#3d6f79', '#73acb7'],
-  delivery:  ['#24456b', '#2f6aa8', '#58a6ff'],   // the authored ramp, unchanged
-  assurance: ['#6402ab', '#9337d5', '#c58bef'],
-  comms:     ['#77205a', '#b03788', '#ce90b9'],
-};
+ * Measured in linearized Rec.709: the four ramps are isoluminant with each
+ * other to within 0.101 / 0.241 / 0.002 at slots 6 / 7 / 8, landing at
+ * Y = 5.7 / 10.5 / 13.7. The shipped lit slot was 36.57 -- BRIGHTER than
+ * #f85149 (26.32), so the identity channel was outshouting the alert channel
+ * on every figure. Re-levelling costs nothing, because hue was always the
+ * channel carrying identity and luminance was only ever along for the ride.
+ * All four hues are cool, deliberately clear of the red/amber/green anchors,
+ * so a shirt can never be read as ok / warn / bad. */
+const RAMPS = [
+  ['#28494f', '#36616a', '#3d6f79'],   // teal
+  ['#1f466e', '#295e94', '#2f6aa8'],   // blue (the authored ramp, re-levelled)
+  ['#61248c', '#8231bc', '#9337d5'],   // violet
+  ['#742459', '#9b3178', '#b03788'],   // magenta
+];
 const PALW = {};
-for (const k in SHIRT) {
-  const p = PAL.worker.slice();
-  p[6] = SHIRT[k][0]; p[7] = SHIRT[k][1]; p[8] = SHIRT[k][2];
-  PALW[k] = mkpal(p);
-}
-const palOf = w => PALW[w.objective] || PALC.worker;
 
 /* ---- the commute state machine ------------------------------------------ */
 const HSPD = 2;   // 2px/tick. LEGS[2] spreads ~4px per half-cycle, so 2px at
                   // 8fps is the speed the leg art was drawn for.
-const VSPD = 1;   // half speed down the gutter: the walk cycle is pure side
-                  // view, so the descent is sold by cadence, not by new art.
+const VSPD = 1;   // half speed down the gutter: the cycle is a 3/4 side view,
+                  // so the descent is sold by cadence, not by new art. With
+                  // the gait now keyed to DISTANCE this also halves the leg
+                  // rate automatically, which is the whole skating fix.
 const DWELL = 12; // 12 ticks = 1.5s = exactly 4 complete 3-frame swings. A
                   // COUNT, not a timer: four strikes per queue item.
 const REST = 6;   // 750ms at the gate. Turning straight round reads as frantic.
 const ST = { HOME: 0, OUT: 1, DOWN: 2, IN: 3, WORK: 4, BACK_IN: 5, UP: 6, BACK: 7 };
-const WALKING = s => s !== ST.HOME && s !== ST.WORK;
 
-/* Exact arrival by clamping the final step. Integer only -- every step covers
- * the same distance except the clamped last one (1px on an odd span, invisible
- * at 8fps). Returns true on the tick it LANDS, so the next tick starts the
- * next leg and no tick is spent standing still. */
-function axis(w, k, to, spd) {
+/* Exact arrival by clamping the final step, and the step is RECORDED so the
+ * gait can key off real distance instead of off the clock. Integer only: every
+ * step covers the same distance except the clamped last one (1px on an odd
+ * span, invisible at 8fps), so `=== to` is a valid test with no epsilon and no
+ * overshoot. Returns true on the tick it LANDS, so no tick is spent at a
+ * corner. w.dx is the ONLY thing the leg frame may consult, and it is set here
+ * and nowhere else -- which is what makes the no-treadmill invariant
+ * structural rather than inferred from three separate conditions. */
+function move(w, k, to, spd) {
   const d = to - w[k];
-  if (d === 0) return true;
-  w[k] += (d < 0 ? -1 : 1) * Math.min(spd, Math.abs(d));
+  if (d === 0) { w.dx = 0; return true; }
+  const s = (d < 0 ? -1 : 1) * Math.min(spd, Math.abs(d));
+  w[k] += s; w.dx = s; w.travel += Math.abs(s);
   return w[k] === to;
 }
 // Never flip facing mid-leg, never on a vertical leg: a figure that turns
@@ -114,6 +117,19 @@ function boot(FARM, srcLabel) {
    * occupy would be invention. The lamps are already baked and the roster
    * declares the objectives, so home costs zero new pixels. */
   const OBJS = [...new Set(FARM.workers.map(w => w.objective))];
+  // Ramps are assigned by POSITION in the live roster. The shipped SHIRT table
+  // was keyed by objective NAME with the DEMO fixture's names, so palOf() fell
+  // through to the default blue for 7 of 10 workers on the live model and only
+  // the ecosystem stewards got a hue. A silent fallback is what hid it.
+  OBJS.forEach((o, i) => { const p = PAL.worker.slice(), r = RAMPS[i % RAMPS.length];
+    p[6] = r[0]; p[7] = r[1]; p[8] = r[2]; PALW[o] = mkpal(p); });
+  const palOf = w => PALW[w.objective] || PALC.worker;
+  // A FRESHNESS CONTRACT ON THE ROSTER ITSELF. Motion is a readout of backlog,
+  // so the readout has to be in date; queueAgeDays is the mtime of the steward
+  // roster, emitted by the derive layer. Absent => the gate is inert, not wrong.
+  const qAge = FARM.queueAgeDays;
+  const rosterFresh = qAge == null || qAge <= 7;
+  const SURV = {}; FARM.fields.forEach((fd, i) => { SURV[i] = fd.surveyed !== false; });
   const NG   = Math.max(2, OBJS.length);
   const gX   = i => 30 + Math.floor(i * (S.w - 60) / (NG - 1)) + 2;
   const FIDX = {}; FARM.fields.forEach((f, i) => FIDX[f.id] = i);
@@ -137,7 +153,8 @@ function boot(FARM, srcLabel) {
     // nothing to work, so it is BAKED with a steady alert -- a standing
     // condition does not need to flash, and flashing it would cost 8fps
     // forever for one glyph.
-    w.mobile = w.queue > 0;
+    w.mobile = w.queue > 0 && rosterFresh;
+    w.frozen = w.queue > 0 && !rosterFresh;
     w.lane = w.state === 'distress' ? 0 : (i & 1);   // alert glyph in clear air
     w.gx = gX(gi) + slot * 14 - (((n - 1) * 14) >> 1);  // 14px pitch at 16px wide
     w.fy0 = LANE[w.lane];
@@ -146,12 +163,14 @@ function boot(FARM, srcLabel) {
     w.st = ST.HOME;
     w.rest = 2 + ((i * 7) % 17);         // coprime stagger: no lockstep launch
     w.dwell = 0; w.lap = 0; w.terr = []; w.off = [];
+    w.travel = (i * 3) & 7; w.dx = 0; w.onVoid = false;
     for (const r of (w.roots || []))
       if (FIDX[r] === undefined) w.off.push(r); else w.terr.push(FIDX[r]);
   });
 
   function stepWorker(w) {
-    if (!w.mobile) return;               // queue 0 is BAKED, never stepped
+    w.dx = 0;                            // reset every tick; see move()
+    if (!w.mobile) return;               // queue 0 or a stale roster is BAKED
     switch (w.st) {
       case ST.HOME:
         if (--w.rest > 0) return;
@@ -162,41 +181,93 @@ function boot(FARM, srcLabel) {
         w.gut = w.fi < 0 ? OFFX : gutX(w.fi);
         w.ctr = w.fi < 0 ? OFFX : ctrX(w.fi);
         w.hed = w.fi < 0 ? OFFY : hedY(w.fi);
+        // THE GROUND decides whether work may be shown, not the charter lane.
+        w.onVoid = w.fi < 0 || !SURV[w.fi];
         face(w, w.gut - w.px); w.st = ST.OUT; return;
-      case ST.OUT:     if (axis(w, 'px', w.gut, HSPD)) w.st = ST.DOWN; return;
-      case ST.DOWN:    if (axis(w, 'py', w.hed, VSPD)) { face(w, w.ctr - w.px); w.st = ST.IN; } return;
-      case ST.IN:      if (axis(w, 'px', w.ctr, HSPD)) { w.st = ST.WORK; w.dwell = DWELL; } return;
+      case ST.OUT:     if (move(w, 'px', w.gut, HSPD)) w.st = ST.DOWN; return;
+      case ST.DOWN:    if (move(w, 'py', w.hed, VSPD)) { face(w, w.ctr - w.px); w.st = ST.IN; } return;
+      case ST.IN:      if (move(w, 'px', w.ctr, HSPD)) { w.st = ST.WORK; w.dwell = DWELL; } return;
       case ST.WORK:    if (--w.dwell <= 0) { face(w, w.gut - w.px); w.st = ST.BACK_IN; } return;
-      case ST.BACK_IN: if (axis(w, 'px', w.gut, HSPD)) w.st = ST.UP; return;
-      case ST.UP:      if (axis(w, 'py', w.fy0, VSPD)) { face(w, w.gx - w.px); w.st = ST.BACK; } return;
-      case ST.BACK:    if (axis(w, 'px', w.gx, HSPD)) { w.lap++; w.rest = REST; w.st = ST.HOME; } return;
+      case ST.BACK_IN: if (move(w, 'px', w.gut, HSPD)) w.st = ST.UP; return;
+      case ST.UP:      if (move(w, 'py', w.fy0, VSPD)) { face(w, w.gx - w.px); w.st = ST.BACK; } return;
+      case ST.BACK:    if (move(w, 'px', w.gx, HSPD)) { w.lap++; w.rest = REST; w.st = ST.HOME; } return;
     }
   }
 
+  /* ---- the ground tilemap -----------------------------------------------
+   * MurmurHash3 finalizer on a 2-D mix. The table has 16 entries so the
+   * reduction is a MASK, not a modulo, and there is no modulo bias at all.
+   * MEASURED, and it contradicts what was proposed: a WOVEN table is not
+   * better here. Sorted measures H 15.36-16.94% / V 15.70-18.01% adjacency
+   * against a true chance of 17.97% -- at or BELOW chance -- while every woven
+   * table I tried came out above it (best 18.23-18.72%). With a proper
+   * avalanche and a power-of-2 mask the hash needs no help; weaving only pays
+   * when the table's own period interacts with a modulo.
+   * The shipped code was (c+r)%2 over two variants: a 45-degree plaid with
+   * period (2,0) and exactly 1 distinct tile per parity -- the same geometry
+   * engine.js forbids for dither, arriving through the tilemap instead. */
+  function ghash(c, r) {
+    let h = ((c * 73856093) ^ (r * 19349663)) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0; h = Math.imul(h, 2246822519) >>> 0;
+    h = (h ^ (h >>> 13)) >>> 0; h = Math.imul(h, 3266489917) >>> 0;
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+  const GV = [T.grass1, T.grass2, T.grass3, T.grass4, T.grassTuft, T.grassStone];
+  // frequencies are auditable by reading the table: 4 quiet at 18.75%,
+  // tuft 18.75%, stone 6.25%. Measured longest same-variant run: 4 tiles.
+  const GTAB = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5];
+
   /* ---- the baked ground layer ------------------------------------------- */
+  const JIT = [0, 1, 0, 2, 1, 0, 1, 2, 0, 1];
   function lampPool(cx, cy, r) {
     const mid = PAL.ground[12], lit = PAL.ground[13];
     for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
-      const d2 = x * x + y * y; if (d2 > r * r) continue;
-      // Two levels only. A third band needs dither at d>=3, which is
-      // 45-degree stripes rather than texture.
-      if (d2 <= (r * 0.42) * (r * 0.42)) S.px(cx + x, cy + y, lit);
-      else if (((cx + x) + (cy + y)) % 2 === 0) S.px(cx + x, cy + y, mid);
+      // ELLIPTICAL: light falling on a flat plane seen at this angle is an
+      // ellipse; a circle reads as a decal. And the outer band is now a SOLID
+      // two-level falloff with a per-column jitter instead of a d=2
+      // checkerboard -- engine.js declares dither "reserved for ONE job: the
+      // frosted unobservable material", so a dithered light pool had two
+      // meanings riding one material. The checkerboard now belongs to frost
+      // alone, which is what the engine's own comment already promises.
+      const d2 = x * x + y * y * 2.4; if (d2 > r * r) continue;
+      if (d2 <= (r * 0.42) * (r * 0.42)) { S.px(cx + x, cy + y, lit); continue; }
+      const rr = r - JIT[(cx + x + 64) % 10];
+      if (d2 <= rr * rr) S.px(cx + x, cy + y, mid);
     }
   }
-  function hatch(x, y, w, h, step) {      // the one "cannot see this" material
-    S.rect(x, y, w, h, '#2a1414');
-    for (let i = 0; i < w; i += (step || 3)) S.line(x + i, y, x + i, y + h - 1, '#a32b2b', 2);
+  /* The one "cannot see this" material. The shipped version was S.rect in
+   * '#2a1414' plus S.line at step 3 stippled at step 2 -- two colours in
+   * NEITHER palette, and a texture made of LINES. It is now the real ground
+   * tile (voidTile: broken earth, detail 24.6% / clustering 94%) with the
+   * sanctioned d=2 frost in the alert red over it, so the terrain stays
+   * terrain and the alert keeps carrying the meaning. */
+  function hatch(x, y, w, h) {
+    for (let j = 0; j < h; j += TILE) for (let i = 0; i < w; i += TILE)
+      S.tilePx(T.voidTile, x + i, y + j);
+    S.frost(x, y, w, h, '#a32b2b');
   }
   function building(b, x, y) {
     const w = BW * TILE, sick = b.health === 'bad', dead = b.health === 'condemned',
           unobs = b.health === 'unobservable';
-    for (let c = 0; c < BW; c++) {        // roof: two authored shingle courses
-      S.blit(A.parts.roof, x + c * TILE, y, PALC.build);
-      S.blit(A.parts.roof, x + c * TILE, y + 8, PALC.build);
+    // CONTACT SHADOW first, so the structure sits on top of it. Nothing in the
+    // shipped scene cast one: a 64x40 building floated on grass.
+    S.blit(A.props.shadCapL, x - 3, y + BH - 2, PALC.ground);
+    for (let i = 0; i < (w >> 3); i++)
+      S.blit(A.props.shadMid, x + 2 + i * 8, y + BH - 2, PALC.ground);
+    S.blit(A.props.shadCapL, x + w - 2, y + BH - 2, PALC.ground, true);
+    // roofC, not roof: PARTS.roof has col0 === col15 on ALL EIGHT rows because
+    // its stagger has period 3 and 16 % 3 === 1, so every one of the 40 tile
+    // joins puts two like pixels together and the stagger breaks. roofC has
+    // period 4; its run lengths measure a constant 2 in-tile AND across a join.
+    for (let c = 0; c < BW; c++) {
+      S.blit(A.parts.roofC, x + c * TILE, y, PALC.build);
+      S.blit(A.parts.roofC, x + c * TILE, y + 8, PALC.build);
     }
+    // wallClap, not wall: PARTS.wall has SIX of eight rows full-width
+    // single-value, so three stacked courses draw a hard full-width horizontal
+    // band every 4px across 24px of wall -- a venetian blind. wallClap has none.
     for (let r = 0; r < 3; r++) for (let c = 0; c < BW; c++)
-      S.blit(A.parts.wall, x + c * TILE, y + 16 + r * 8, PALC.build);
+      S.blit(A.parts.wallClap, x + c * TILE, y + 16 + r * 8, PALC.build);
     // One window per seat. lit = judged healthy, dim = judged sick, dark =
     // cannot be judged at all. Three states, never two: "unknown" is not a
     // shade of "ok".
@@ -204,47 +275,95 @@ function boot(FARM, srcLabel) {
     for (let i = 0; i < n; i++) {
       const part = i < b.seats - b.bad - b.unobs ? A.parts.winLit
                  : i < b.seats - b.unobs ? A.parts.winDim : A.parts.winDark;
-      S.blit(part, x + 4 + i * 7, y + 20, PALC.build);
+      // CENTRED as a group. The shipped stride was hardcoded from x+4, so a
+      // 1-seat building put its single window 25px left of a centred door and
+      // left 55px of blank siding -- and three of the ten departments are
+      // 1-seat. Integer shift, so nothing snaps.
+      S.blit(part, x + ((w - (n * 7 - 2)) >> 1) + i * 7, y + 20, PALC.build);
     }
     S.blit(A.parts.door, x + (w >> 1) - 3, y + BH - 10, PALC.build);
     // frost is the ONLY use of dither: unobservable is a MATERIAL, never a
     // colour on the green/amber/red axis
     if (unobs) S.frost(x, y, w, BH, PAL.build[11]);
+    // The diagonal S.line hatch is GONE: dx=8 over dy=39 is a ~78 degree
+    // stipple, which is exactly the d>=3 continuous-stripe artefact engine.js
+    // forbids in the same file that drew it. S.frost IS the sanctioned d=2.
     if (dead)  { S.frost(x, y, w, BH, PAL.build[7]);
-                 for (let i = 0; i < w; i += 5) S.line(x + i, y, x + i + 8, y + BH - 1, PAL.build[7], 2); }
-    if (sick)  S.frame(x - 1, y - 1, w + 2, BH + 2, '#f85149');
-    const c = dead ? '#49525e' : sick ? '#f85149' : '#7d8794';
+                 S.blit(A.props.stump, x + w - 9, y + BH + 1, PALC.ground); }
+    // The red 1px frame is GONE: drawn 1px OUTSIDE its own bounds it overwrote
+    // the grass and read as a selection box above the world, and because it was
+    // baked it could never blink. The label and the N/M SICK sub-label below
+    // already carry the alert in #f85149, so the channel is not lost.
+    if (sick)  S.blit(A.props.rockSmall, x - 2, y + BH + 1, PALC.ground);
+    // '#7d8794' measures Y=23.83 -- inside the Y>=20 alert register, for a
+    // neutral label. '#49525e' (8.26) is the dim value the sub-label already
+    // uses, and unobs keeps the frost-adjacent grey so the two stay distinct.
+    const c = dead ? '#49525e' : sick ? '#f85149' : unobs ? '#7d8794' : '#49525e';
     S.text(x + ((w - S.tw(b.label)) >> 1), y + BH + 2, b.label, c);
     const sub = sick ? b.bad + '/' + b.seats + ' SICK'
               : unobs ? b.unobs + ' UNJUDGED' : dead ? 'CONDEMNED' : b.seats + ' SEAT';
     S.text(x + ((w - S.tw(sub)) >> 1), y + BH + 9, sub,
       dead ? '#49525e' : sick ? '#f85149' : unobs ? '#7d8794' : '#49525e');
   }
-  function field(f, x, y) {
-    const tile = !f.surveyed ? null
-               : f.neglect >= 3 ? T.over : f.neglect === 2 ? T.weedy : T.soil;
+  function field(f, x, y, idx) {
+    // PER-CELL selection. The shipped loop blitted ONE tile for all six cells,
+    // so every plot was a hard-edged rectangle butted against grass with no
+    // transition at all -- the single loudest amateur tell in the image.
+    // At FW=3/FH=2 every cell IS an edge or a corner, so the plot renders
+    // entirely as NW/N/NE over SW/S/SE and no interior tile is ever drawn.
+    const interior = f.neglect >= 3 ? T.over : f.neglect === 2 ? T.weedy : T.soil;
+    const NV = ghash(idx, 0) & 1;                 // plot tops differ plot to plot
     for (let r = 0; r < FH; r++) for (let c = 0; c < FW; c++) {
-      if (tile) S.tilePx(tile, x + c * TILE, y + r * TILE);
-      else hatch(x + c * TILE, y + r * TILE, TILE, TILE);  // never a tidy plot
+      const px = x + c * TILE, py = y + r * TILE;
+      if (!f.surveyed) { S.tilePx(T.voidTile, px, py); continue; }
+      const n = r === 0, s = r === FH - 1, wst = c === 0, e = c === FW - 1;
+      let t = interior;
+      if (n && wst) t = T.soilNW; else if (n && e) t = T.soilNE;
+      else if (s && wst) t = T.soilSW; else if (s && e) t = T.soilSE;
+      else if (n) t = NV ? T.soilN2 : T.soilN;
+      else if (s) t = NV ? T.soilS2 : T.soilS;
+      else if (wst) t = T.soilW; else if (e) t = T.soilE;
+      S.tilePx(t, px, py);
     }
     const w = FW * TILE;
-    S.frame(x, y, w, FH * TILE, f.sole ? '#d29922' : '#1b2026');
-    if (f.sole) S.blit(A.props.crate, x + w - 7, y + 3, PALC.build);
-    S.text(x + 1, y - 8, String(f.id).slice(0, 9), !f.surveyed ? '#f85149' : '#7d8794');
+    // The 1px '#1b2026' rectangle is GONE. It was in no palette, it was a
+    // diagram stroke drawn around world geometry, and the transition tiles ARE
+    // the boundary now -- a stroke on top of them cancels the whole point.
+    // A fence is an object in the world and carries the same containment.
+    for (let c = 0; c < FW; c++) {
+      S.blit(A.props.fenceRail, x + c * TILE, y - 5, PALC.ground);
+      S.blit(A.props.fenceRail, x + c * TILE, y + FH * TILE + 1, PALC.ground);
+    }
+    S.blit(A.props.fencePost, x - 1, y - 6, PALC.ground);
+    S.blit(A.props.fencePost, x + w - 2, y - 6, PALC.ground);
+    // sole_copy_risk keeps its meaning but becomes an OBJECT, not a highlight
+    // on a box: crateBig is 12x11 against the shipped crate's 4x4 (a 2x2
+    // interior = 12 screen px with a 6px hole), for the ONE field in the
+    // estate where loss is irreversible.
+    if (f.sole) S.blit(A.props.crateBig, x + w - 15, y + FH * TILE - 13, PALC.ground);
+    S.text(x + 1, y - 12, String(f.id).slice(0, 9), !f.surveyed ? '#f85149' : '#7d8794');
     const soil = f.soil === 'watered' ? 'SAFE' : f.soil === 'dry' ? 'ONE DISK' : 'NO GIT';
-    S.text(x + 1, y + FH * TILE + 2, soil,
+    S.text(x + 1, y + FH * TILE + 6, soil,
       f.soil === 'watered' ? '#3fb950' : f.soil === 'dry' ? '#d29922' : '#f85149');
     const NEG = ['TENDED', 'FINE', 'WEEDS', 'OVERGROWN'];
-    S.text(x + 1, y + FH * TILE + 9, NEG[f.neglect] + ' ' + Math.round(f.age || 0) + 'D',
+    S.text(x + 1, y + FH * TILE + 13, NEG[f.neglect] + ' ' + Math.round(f.age || 0) + 'D',
       f.neglect >= 3 ? '#d29922' : '#49525e');
   }
 
   function bakeGround() {
     S.dropGround();
     for (let r = 0; r <= ROWS; r++) for (let c = 0; c <= COLS; c++)
-      S.tile((c + r) % 2 ? T.grassA : T.grassB, c, r);
-    for (let c = 0; c <= COLS; c++) for (let r = 0; r < Math.ceil(Y.pathH / TILE); r++)
-      S.tilePx(T.path, c * TILE, Y.path + r * TILE);
+      S.tile(GV[GTAB[ghash(c, r) & 15]], c, r);
+    // 3 edge variants x 3 interiors, all placed by the same hash. The band went
+    // from 1 distinct 16px column slice of 28 (and a 16px period) to 18 of 28
+    // with no period inside 224px.
+    const PN = [T.pathN, T.pathN2, T.pathN3], PM = [T.path, T.pathB, T.pathC],
+          PS = [T.pathS, T.pathS2, T.pathS3];
+    for (let c = 0; c <= COLS; c++) {
+      S.tilePx(PN[ghash(c, 101) % 3], c * TILE, Y.path);
+      S.tilePx(PM[ghash(c, 102) % 3], c * TILE, Y.path + TILE);
+      S.tilePx(PS[ghash(c, 103) % 3], c * TILE, Y.path + 2 * TILE);
+    }
     // The lamps ARE the home gates, so their count follows the roster rather
     // than a hardcoded 4. On a 4-objective roster gX() reproduces the previous
     // hardcoded x values exactly, so this is a no-op on that shape.
@@ -252,7 +371,12 @@ function boot(FARM, srcLabel) {
     for (let i = 0; i < NG; i++) {
       const lx = gX(i) - 2;
       lampPool(lx + 2, Y.path + 26, 22);
-      S.blit(A.parts.lamp, lx, Y.path - 6, PALC.build);
+      // PARTS.lamp is a ONE-pixel post: a 3px scratch at SCALE=3 with no
+      // key-line and no ground contact. Two blits at ONE origin, because the
+      // amber must stay in PAL.build and the shadow must stay in PAL.ground --
+      // lanternPost rows 0-5 are transparent precisely so the head lands here.
+      S.blit(A.props.lanternPost, lx - 1, Y.path - 14, PALC.ground);
+      S.blit(A.parts.lanternHead, lx - 1, Y.path - 14, PALC.build);
       const t = String(OBJS[i] || '').toUpperCase().slice(0, 9);
       S.text(gX(i) - (S.tw(t) >> 1), Y.path + 41, t, '#49525e');
     }
@@ -267,11 +391,12 @@ function boot(FARM, srcLabel) {
       S.frame(8, by0, S.w - 16, 30, '#f85149');
       S.text((S.w - S.tw('NO MAP - REGISTRY UNREADABLE')) >> 1, by0 + 9, 'NO MAP - REGISTRY UNREADABLE', '#f85149');
       S.text((S.w - S.tw('THIS IS NOT AN EMPTY FARM')) >> 1, by0 + 18, 'THIS IS NOT AN EMPTY FARM', '#e6e9ee');
-    } else FARM.fields.forEach((f, i) => field(f, fx(i), fy(i)));
+    } else FARM.fields.forEach((f, i) => field(f, fx(i), fy(i), i));
     S.text(8, Y.shed - 9, 'SCHEDULED MACHINES', '#49525e');
     const per = Math.max(8, Math.floor((S.w - 16) / 24));
     FARM.machines.forEach((m, i) => {
       const x = 8 + (i % per) * 24, y = Y.shed + Math.floor(i / per) * 18;
+      S.blit(A.props.shadShed, x - 1, y + 5, PALC.ground);
       S.blit(A.props.shed, x, y, PALC.build);
       if (m.state !== 'running') S.frost(x, y, 9, 7, PAL.build[11]);
       const c = m.state === 'running' ? '#3fb950' : m.state === 'faulted' ? '#f85149' : '#49525e';
@@ -301,7 +426,17 @@ function boot(FARM, srcLabel) {
         S.text(w.px - 11, w.py - 31, '!', '#f85149');     // blinking. Flashing
         S.frame(w.px - 9, w.py - 33, 18, 34, '#f85149');  // would cost 8fps
       }                                                   // forever for a glyph.
-      S.text(w.px - 11, w.py + 6, String(w.id).slice(0, 8), '#49525e');
+      // A STALE ROSTER IS FROSTED, NOT WALKING. frost is already the material
+      // for "cannot be judged"; a steward whose backlog list is past its
+      // freshness contract is exactly that, and the alternative is nine
+      // figures walking forever at a fixed speed off a hand-edited file.
+      if (w.frozen) S.frost(w.px - 8, w.py - 32, 16, 32, PAL.build[11]);
+      // The per-worker id label is GONE. It was drawn at w.py+6, which
+      // overprinted the BAKED gate label at Y.path+41 by 3px on lane 0 and 2px
+      // on lane 1 -- at the same x, because a resting worker sits at its own
+      // gate for REST ticks every lap -- and spilled 3px past the cobble onto
+      // grass. The rail prints every id permanently, which is the page's own
+      // stated contract.
     }
     // header
     S.rect(0, 0, S.w, 9, FARM.weather.verdict === 'OK' ? '#14241a' : '#2a1414');
@@ -320,50 +455,66 @@ function boot(FARM, srcLabel) {
   /* ---- per-frame drawing ------------------------------------------------- */
   let tick = 0, last = 0, raf = null;
   function drawWorker(w, blink) {
-    const x = w.px - 8, y = w.py - 32, walk = WALKING(w.st);
-    // CONTACT SHADOW -- the cheapest cue that a sprite is ON the ground rather
-    // than pasted over it. Same ink as the sprite key-line (#0e1014, Y=0.51),
-    // so it is the same discipline, not a new colour. Measured dY: 2.42 over
-    // path-mid, 1.81 over grass-mid -- inside the structure register (ground
-    // ramps span 1.6-2.8) and nowhere near the +22 the alert axis keeps.
-    S.hline(w.px - 4, w.py + 1, 9, '#0e1014');
-    S.hline(w.px - 2, w.py + 2, 5, '#0e1014');
-    // Legs cycle ONLY while translating. A planted figure whose legs cycle is
-    // the loudest tell in pixel art, so HOME and WORK both hold frame 0.
-    S.blit(walk ? A.frames[(tick + w.ph) & 3] : A.frames[0], x, y, palOf(w), w.dir < 0);
+    const x = w.px - 8, y = w.py - 32;
+    // CONTACT SHADOW. Same ink as the sprite key-line (#0e1014, Y=0.51), so it
+    // is the same discipline rather than a new colour; it is also now PAL.ground
+    // slot e, so the prop shadows and the figure shadow are one value.
+    S.hline(w.px - 4, w.py + 1, 9, PAL.ground[14]);
+    S.hline(w.px - 2, w.py + 2, 5, PAL.ground[14]);
+    // THE GAIT IS A FUNCTION OF DISTANCE, NOT OF TIME. 2px per leg frame is the
+    // authored stride. The shipped code indexed A.frames by `tick`, which ran
+    // the legs at 1 frame/tick while the body translated 2px/tick horizontally
+    // but only 1px/tick vertically -- so 40.9% of all walking (measured over
+    // 4800 ticks) ran the cycle at 2x the stride, i.e. skating, and 389 ticks
+    // advanced a leg frame with ZERO translation. dx === 0 forces the contact
+    // pose, so a leg frame now cannot advance unless the figure moved.
+    S.blit(w.dx ? A.frames[(w.travel >> 1) & 3] : A.frames[0], x, y, palOf(w), w.dir < 0);
 
     if (w.st === ST.WORK) {
-      // A dead lane is effort with nothing produced, so a steward on a dead
-      // lane may not be drawn striking soil: the hoe goes up on tool frame 0
-      // and never comes down.
-      const refused = w.state === 'distress';
+      // TWO FACTS, TWO CHANNELS. A dead lane is a property of the STEWARD, so
+      // it keeps the blinking '!' and gains frost. Whether work can be SHOWN is
+      // a property of the GROUND: INDEX and SECURITY till claude_cfg and
+      // ARCHIVE tills the unsurveyed archive field -- surveyed:false, drawn by voidTile
+      // as ground nobody has walked -- and LIFE routes to the OFF REG void,
+      // whose entire meaning is "we do not know where this work happens". The
+      // shipped code keyed the refusal to the charter lane alone, so it refused
+      // the healthiest ground on the farm and struck the deadest.
+      const refused = w.state === 'distress' || w.onVoid;
       const ti = refused ? 0 : (tick + w.ph) % 3;
-      // y+14, not y+8: puts the strike at the ankles instead of the waist, so
-      // the swing visibly reaches the soil it represents.
       S.blit(A.tools[ti], x, y + 14, palOf(w), w.dir < 0);
       if (!refused && ti === 2) {                    // the strike LANDS
-        S.px(w.px + w.dir * 3, w.py,     PAL.ground[6]);   // 2px of thrown
-        S.px(w.px + w.dir * 5, w.py - 1, PAL.ground[6]);   // soil, 1 tick in 3
+        S.px(w.px + w.dir * 3, w.py,     PAL.ground[6]);
+        S.px(w.px + w.dir * 5, w.py - 1, PAL.ground[6]);
       }
     }
-    // QUEUE DEPTH as discrete pips, never a shrinking number: the queue on
-    // disk has NOT drained, so nothing here may claim it has. The COUNT is
-    // constant and only the LIT pip advances, one per completed lap.
-    const n = Math.min(w.queue, 6), act = w.lap % Math.max(1, w.queue);
-    for (let i = 0; i < n; i++)
-      S.rect(x + 2 + i * 3, y - 3, 2, 2, (i === act && act < n) ? '#e6e9ee' : '#49525e');
+    // QUEUE DEPTH, unary and static. The shipped version advanced a LIT pip one
+    // per lap on modulus w.queue while laps rotate TERRITORY on modulus
+    // w.terr.length -- the two differ for 8 of 9 mobile stewards, so the lit
+    // item and the worked plot were unrelated while drawn on the same figure at
+    // the same instant. Worse, it is a progress indicator cycling over a list
+    // that provably never drains. Depth is the only honest reading until the
+    // roster carries per-item identity.
+    const n = Math.min(w.queue, 6);
+    for (let i = 0; i < n; i++) S.rect(x + 2 + i * 3, y - 3, 2, 2, '#49525e');
     if (w.queue > 6) S.text(x + 20, y - 4, '+' + (w.queue - 6), '#49525e');
 
-    if (w.state === 'distress' && blink) {
-      S.text(w.px - 11, y + 1, '!', '#f85149');   // LEFT of the head, not above:
-      S.frame(x - 1, y - 1, 18, 34, '#f85149');   // above collides with the
-    }                                             // building sub-label row.
-    S.text(w.px - 11, w.py + 6, String(w.id).slice(0, 8),
-      w.state === 'distress' ? '#f85149' : '#3fb950');
+    if (w.state === 'distress') {
+      if (blink) S.text(w.px - 11, y + 1, '!', '#f85149');
+      S.frost(x, y, 16, 32, PAL.build[11]);   // the lane has produced nothing
+    }
+    // The green nameplate is GONE: '#3fb950' measures Y=36.33, brighter than
+    // #f85149 (26.32) and 4.3x the brightest ground colour, so nine of them
+    // were the loudest objects on a canvas whose dusk palette exists to reserve
+    // the top of the range for alerts -- and the BAKED idle steward's label was
+    // '#49525e' for the same datum. The rail carries every id.
   }
 
-  function draw(now) {
-    const blink = ((now / 380) | 0) % 2 === 0;
+  function draw() {
+    // Tick-driven, not wall-clock. 380ms is not a multiple of the tick, so the
+    // '!' was held for runs of 2 then 3 frames (2/3/4 on a 120/144Hz panel) --
+    // an alert flickering on an irregular beat reads as a rendering fault. Two
+    // ticks on, two off = a regular 4Hz/2 = 2Hz at the 125ms tick.
+    const blink = ((tick >> 1) & 1) === 0;
     S.restoreGround();
     // Painter's order by LIVE foot row: lower on screen = nearer = drawn later
     // = occludes. A static lane sort cannot work once workers move vertically,
@@ -378,23 +529,54 @@ function boot(FARM, srcLabel) {
   // The predicate is DERIVED FROM DATA, never from a wish for motion. If every
   // queue drained, anyMobile() goes false, rAF is never scheduled, and the
   // farm is a still image. Motion is EARNED by backlog.
-  const anyMobile = () => FARM.workers.some(w => w.queue > 0);
+  // w.mobile, NOT w.queue: mobile is (queue > 0 && the roster is inside its
+  // freshness contract). Testing the queue alone would arm the loop for a STALE
+  // roster whose workers are all baked -- a spin that draws an unchanging frame
+  // 8 times a second, which is the exact battery spend the contract forbids.
+  const anyMobile = () => FARM.workers.some(w => w.mobile);
+  let onScreen = true;
+  const awake = () => !document.hidden && onScreen;
   function frame(now) {
-    if (document.hidden) { raf = null; return; }   // hidden tab draws nothing
-    if (now - last > 125) {                        // 8fps: the 16-bit cadence
-      last = now; tick++;
+    if (!awake()) { raf = null; return; }   // hidden OR off-screen draws nothing
+    // ACCUMULATE, do not reset. `last = now` quantised the tick to the display
+    // refresh and never produced 8fps: measured 7.50fps at 60/75/90Hz, 7.67 at
+    // 120Hz, 7.85 at 165Hz, so screen speed depended on the panel. Advancing
+    // `last` on a 125ms grid holds a true 8.00fps at every rate, and the
+    // floor-multiply prevents a catch-up burst after a stall.
+    if (now - last >= 125) {
+      last += 125 * Math.max(1, Math.floor((now - last) / 125));
+      tick++;
       for (const w of FARM.workers) stepWorker(w);
-      draw(now);
+      draw();
     }
     raf = requestAnimationFrame(frame);
   }
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = null; }
-    else if (!raf && anyMobile()) { last = 0; raf = requestAnimationFrame(frame); }
-  });
+  const wake = () => { if (awake() && !raf && anyMobile()) { last = 0; raf = requestAnimationFrame(frame); } };
+  const sleep = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+  document.addEventListener('visibilitychange', () => document.hidden ? sleep() : wake());
+  // document.hidden is FALSE for a window that is backgrounded but still
+  // rendered -- another window on top, a second monitor, a non-focused Space --
+  // and for a canvas scrolled out of view. In those states the shipped page
+  // animated indefinitely, doing a full-buffer restore plus putImageData plus a
+  // scaled drawImage per tick for a canvas nobody is looking at. That is the one
+  // remaining path where a battery is spent saying one thing.
+  if (typeof IntersectionObserver === 'function') {
+    new IntersectionObserver(e => { onScreen = e[0].isIntersecting; onScreen ? wake() : sleep(); },
+      { threshold: 0.01 }).observe(S.canvas);
+  }
 
   bakeGround();
-  draw(0);
+  // THE NUMBER NOBODY HAS TAKEN. Every frame-rate claim in two sessions has
+  // measured the DRAW; the dominant per-frame cost is the full-buffer restore
+  // plus putImageData plus a scaled drawImage, and it has never been timed.
+  // ?perf=1 prints it instead of asserting it is cheap.
+  if (new URLSearchParams(location.search).has('perf')) {
+    const t0 = performance.now(); for (let i = 0; i < 30; i++) { S.restoreGround(); S.present(); }
+    const ms = (performance.now() - t0) / 30;
+    console.log('[perf] restoreGround+present: ' + ms.toFixed(2) + 'ms/frame, buffer '
+      + S.w + 'x' + S.h + ', headroom at 8fps: ' + (125 / ms).toFixed(1) + 'x');
+  }
+  draw();
   if (anyMobile()) raf = requestAnimationFrame(frame);
 
   /* ---- the rail: DOM owns language, canvas owns space and motion ---------
